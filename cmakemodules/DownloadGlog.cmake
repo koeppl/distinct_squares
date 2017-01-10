@@ -1,0 +1,14 @@
+ExternalProject_Add(
+    glog_external
+    GIT_REPOSITORY https://github.com/google/glog.git
+    CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=<INSTALL_DIR>
+    UPDATE_COMMAND ""
+    PATCH_COMMAND git apply ${CMAKE_SOURCE_DIR}/etc/cygwin-glog.gitpatch
+)
+ExternalProject_Get_Property(glog_external source_dir install_dir)
+
+file(MAKE_DIRECTORY "${install_dir}/include")
+
+set(${package_found_prefix}_CMAKE_DEP glog_external)
+set(${package_found_prefix}_LIBRARIES "${install_dir}/lib/libglog.a")
+set(${package_found_prefix}_INCLUDE_DIRS "${install_dir}/include")
