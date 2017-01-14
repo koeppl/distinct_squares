@@ -1,7 +1,11 @@
 #pragma once
+#ifndef MAIN_HPP
+#define MAIN_HPP
+
 
 #include <iostream>
-#include "/scripts/code/vector.hpp"
+#include "dcheck.hpp"
+#include "vector.hpp"
 #include <string>
 #include <fstream>
 #include <streambuf>
@@ -35,9 +39,9 @@
 
 typedef uint32_t len_t; //! this type should be large enough to address all text positions
 
-constexpr len_t RMQ_THRES_LCP = 10000000;
-constexpr len_t RMQ_THRES_TRYLCP = 1000000;
-constexpr len_t RMQ_THRES_LPF = 1000000;
+constexpr len_t RMQ_THRES_LCP = 10000000; //! if we want to compute LCPs, and we care only about values less than RMQ_THRES_LCP, then we use a naive character comparision
+constexpr len_t RMQ_THRES_TRYLCP = 1000000; //! if we want to compute large LCP values, at least try to do a character comparision of RMQ_THRES_TRYLCP until switching to an RMQ data structure
+constexpr len_t RMQ_THRES_LPF = 1000000; //! if we search for small periods (< RMQ_THRES_LPF/2), we use a linear scan over LPF instead using an RMQ data structure
 
 /**
  * Given a not yet reported leftmost occurence of a square we right-rotate it
@@ -278,8 +282,12 @@ inline len_t lcs_rmq(const isa_t& isai, const lcp_t& lcs, const sdsl::rmq_succin
 
 
 /**
+ * Computes all distinct squares of the text.
+ * On finding such a square the function report_square is called.
+ * This algorithms returns the leftmost occurrences of all squares.
  * @param text the input text. We revert the text in place (and back again), so it cannot be made constant
  * @param report_square a function of type void (*report_square)(len_t start, len_t period)) 
+ * @author Bannai et al., "Computing All Distinct Squares in Linear Time for Integer Alphabets", 2016, https://arxiv.org/abs/1610.03421
  */
 template<class report_t>
 void compute_distinct_squares(std::string& text, const report_t& report_square) {
@@ -321,7 +329,6 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 	std::reverse(text.begin(), text.end());
 
 
-
 	auto lcpq = [&text, &isa,&lcp,&rmqlcp] (const len_t a, const len_t b, const len_t upper_bound) {
 		if(upper_bound < RMQ_THRES_LCP) {
 			return lcp_naive(text, a,b, upper_bound);
@@ -339,9 +346,9 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 
 
 
-	DODEBUG(std::set<std::string> check;)
+	DODEBUG(std::set<std::string> check;) //! used to check whether a square has already been found (only in debug mode available)
 
-	auto report = [&] (const len_t pos, const len_t period) {
+	auto report = [&] (const len_t pos, const len_t period) {  //! passes a found square to the report_square callback function, and does some tests
 		report_square(pos,period);
 		if(VLOG_IS_ON(1)) {
 			DVLOG(1) << "T[" << pos << "," << (pos+period*2-1) << "] = " << text.substr(pos,period) << "," << text.substr(pos+period,period) << " | ";
@@ -464,7 +471,7 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 				if(i >= text.length()) break;
 			}
 
-			//backward
+			//backward search, type (a)
 			if(factor_length >= p) {
 				const len_t q = next_factor_begin-p; DCHECK_GE(next_factor_begin,p);
 				const len_t length_r = lcpq(next_factor_begin,q,p);
@@ -478,8 +485,9 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 					}
 				}
 			}
-			// forward
-			if(factor_length+next_factor_length >= p && i+p < n) {
+			DCHECK_GE(factor_length+next_factor_length, p);
+			// forward search, type (b)
+			if(i+p < n) {
 				const len_t q = i+p;
 				const len_t length_l = (i == 0) ? 0 : lcsq(i-1,q-1); DCHECK_GE(i, length_l); 
 				const len_t s = std::max(i - length_l, (i < p+1) ? 0 : i - p + 1); 
@@ -505,3 +513,5 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 
 
 
+
+#endif /* MAIN_HPP */

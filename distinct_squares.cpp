@@ -3,7 +3,7 @@
 
 
 DEFINE_bool(quiet, false, "Do not output the found squares");
-DEFINE_bool(verbose, false, "Output integer values of the characters");
+DEFINE_bool(verbose, false, "Output additionally the integer values of each output character");
 
 
 
@@ -46,7 +46,7 @@ int main(int argc, char* argv[])
 	std::string text((std::istreambuf_iterator<char>(t)),
 			std::istreambuf_iterator<char>());
 	
-	size_t square_counter = 0;
+	size_t square_counter = 0; //! counts all found squares
 	if(FLAGS_quiet) {
 		compute_distinct_squares(text, [&text,&square_counter] (len_t, len_t ) {
 				++square_counter;

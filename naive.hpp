@@ -1,4 +1,7 @@
 #pragma once
+#ifndef NAIVE_HPP
+#define NAIVE_HPP
+
 #include "main.hpp"
 
 len_t lcs_naive(const std::string& text, const len_t a, const len_t b) {
@@ -75,3 +78,5 @@ void check_square_algo(std::string text) {
 	DCHECK_EQ(squares.size(), naive_squares.size());
 
 }
+
+#endif /* NAIVE_HPP */

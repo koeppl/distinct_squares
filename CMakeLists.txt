@@ -27,7 +27,7 @@ target_link_libraries(check_file
     glog
     sdsl
 	)
-add_executable(distinct_squares squares.cpp)
+add_executable(distinct_squares distinct_squares.cpp)
 target_link_libraries(distinct_squares
 	gflags
     glog
