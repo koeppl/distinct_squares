@@ -64,5 +64,6 @@ int main(int argc, char* argv[])
 				std::cout << std::endl;
 			});
 	}
+	std::cout << "The number of all distinct squares is " << square_counter << std::endl;
 	return 0;
 }
