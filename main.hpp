@@ -35,9 +35,9 @@
 
 typedef uint32_t len_t; //! this type should be large enough to address all text positions
 
-constexpr len_t RMQ_THRES_LCP = 10000;
-constexpr len_t RMQ_THRES_TRYLCP = 1000;
-constexpr len_t RMQ_THRES_LPF = 10000;
+constexpr len_t RMQ_THRES_LCP = 10000000;
+constexpr len_t RMQ_THRES_TRYLCP = 1000000;
+constexpr len_t RMQ_THRES_LPF = 1000000;
 
 /**
  * Given a not yet reported leftmost occurence of a square we right-rotate it
@@ -331,14 +331,9 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 		}
 		return lcp_rmq(isa,lcp,rmqlcp,a,b);
 	};
-	auto lcsq = [&text, &n,&isai,&lcs,&rmqlcs] (const len_t a, const len_t b, const len_t upper_bound) {
-		if(upper_bound < RMQ_THRES_LCP) {
-			const len_t ret = lcs_naive(text, a,b,upper_bound);
-			if(ret <= upper_bound) return ret;
-		} else {
-			const len_t ret = lcs_naive(text, a,b, RMQ_THRES_TRYLCP);
-			if(ret <= RMQ_THRES_TRYLCP) return ret;
-		}
+	auto lcsq = [&text, &n,&isai,&lcs,&rmqlcs] (const len_t a, const len_t b) {
+		const len_t ret = lcs_naive(text, a,b, RMQ_THRES_TRYLCP);
+		if(ret <= RMQ_THRES_TRYLCP) return ret;
 		return lcs_rmq(isai,lcs,rmqlcs,a,b);
 	};
 
@@ -474,7 +469,7 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 				const len_t q = next_factor_begin-p; DCHECK_GE(next_factor_begin,p);
 				const len_t length_r = lcpq(next_factor_begin,q,p);
 				if(length_r > 0 ) {
-					const len_t length_l = (q == 0) ? 0 : lcsq(next_factor_begin-1,q-1,p);
+					const len_t length_l = (q == 0) ? 0 : lcsq(next_factor_begin-1,q-1);
 					if(length_l + length_r >= p) {
 						const len_t s = std::max(q - length_l, (q +1< p) ? 0 : q - p + 1); DCHECK_GE(q, length_l);
 						if(!marker[s]) {
@@ -486,7 +481,7 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 			// forward
 			if(factor_length+next_factor_length >= p && i+p < n) {
 				const len_t q = i+p;
-				const len_t length_l = (i == 0) ? 0 : lcsq(i-1,q-1,p); DCHECK_GE(i, length_l); 
+				const len_t length_l = (i == 0) ? 0 : lcsq(i-1,q-1); DCHECK_GE(i, length_l); 
 				const len_t s = std::max(i - length_l, (i < p+1) ? 0 : i - p + 1); 
 				if(length_l > 0 && s+p <= next_factor_begin) {
 					const len_t length_r = lcpq(i,q,p);
