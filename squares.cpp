@@ -3,6 +3,9 @@
 
 
 DEFINE_bool(quiet, false, "Do not output the found squares");
+DEFINE_bool(verbose, false, "Output integer values of the characters");
+
+
 
 
 int main(int argc, char* argv[])
@@ -43,13 +46,23 @@ int main(int argc, char* argv[])
 	std::string text((std::istreambuf_iterator<char>(t)),
 			std::istreambuf_iterator<char>());
 	
-	const Vector<Square> s = compute_distinct_squares(text);
-	std::cout << "Number of Squares: " << s.size() << std::endl;
-	if(!FLAGS_quiet) {
-		for(size_t i = 0; i < s.size(); ++i) {
-			std::cout << "T[" << s[i].start << "," << (s[i].start+2*s[i].period ) << "]: " << text.substr(s[i].start,2*s[i].period) << std::endl;
-		}
+	size_t square_counter = 0;
+	if(FLAGS_quiet) {
+		compute_distinct_squares(text, [&text,&square_counter] (len_t, len_t ) {
+				++square_counter;
+				});
+	} else {
+		compute_distinct_squares(text, [&text,&square_counter] (len_t pos, len_t period) {
+				std::cout << "T[" << pos << "," << (pos+period*2-1) << "] = " << text.substr(pos,period) << "," << text.substr(pos+period,period) << " | ";
+				++square_counter;
+				if(FLAGS_verbose) {
+					for(len_t i = pos; i < pos+period*2; ++i) { 
+						if(i == pos+period) DVLOG(1) << ","; 
+						std::cout << "(" << ((size_t)text[i]) << ")"; 
+					}
+				}
+				std::cout << std::endl;
+			});
 	}
-
 	return 0;
 }

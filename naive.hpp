@@ -6,13 +6,19 @@ len_t lcs_naive(const std::string& text, const len_t a, const len_t b) {
 	len_t i=0;
 	while(m >= i && text[a-i] == text[b-i]) { ++i;}
 	return i;
-};
+}
 
 len_t lcp_naive(const std::string& text, const len_t a, const len_t b) {
 	len_t i=0;
 	while(text[a+i] == text[b+i]) { ++i;}
 	return i;
-};
+}
+
+struct Square {
+	len_t start;
+	len_t period;
+	Square(len_t _start, len_t _period) : start(_start), period(_period) {}
+} __attribute__((__packed__));
 
 /**
  * Finds the leftmost occurrences of all squares naively in O(n^3 lg n) time.
@@ -45,10 +51,12 @@ Vector<Square> find_naively(const std::string& text) {
 	return squares;
 }
 
+
 void check_square_algo(std::string text) {
 
 	Vector<Square> naive_squares { find_naively(text) };
-	Vector<Square> squares { compute_distinct_squares(text) };
+	Vector<Square> squares;
+	compute_distinct_squares(text, [&squares] (len_t pos, len_t period) { squares.emplace_back(pos,period); });
 
 	std::sort(squares.begin(), squares.end(), [] (const Square& a, const Square& b) 
 			{

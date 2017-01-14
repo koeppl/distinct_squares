@@ -25,7 +25,6 @@
 #undef DCHECK
 #define DCHECK(x) 
 #endif//DCHECK
-
 #ifdef VLOG_IS_ON
 #undef VLOG_IS_ON
 #define VLOG_IS_ON(x) false
@@ -33,9 +32,12 @@
 #endif//DNDEBUG
 
 
+
 typedef uint32_t len_t; //! this type should be large enough to address all text positions
 
-
+constexpr len_t RMQ_THRES_LCP = 10000;
+constexpr len_t RMQ_THRES_TRYLCP = 1000;
+constexpr len_t RMQ_THRES_LPF = 10000;
 
 /**
  * Given a not yet reported leftmost occurence of a square we right-rotate it
@@ -68,7 +70,7 @@ void linear_rightrotate(const std::string& text, len_t s, len_t p, const lpf_t& 
 template<class lpf_t, class report_t, class lcpq_t>
 void rmq_rightrotate(len_t s, len_t p, const lpf_t& lpf, sdsl::bit_vector& marker, const report_t& report,
 		const sdsl::rmq_succinct_sct<>& rmqlpf, const lcpq_t& lcpq) {
-				const len_t replength = lcpq(s,s+p);
+				const len_t replength = lcpq(s,s+p,2*p);
 				const len_t right_range = std::min(s+p-1, s+replength-p);
 				if(s+replength >= p && right_range > s) {
 					std::stack<std::pair<len_t,len_t>> staple;
@@ -242,6 +244,19 @@ inline len_t lcp_rmq(const isa_t& isa, const lcp_t& lcp, const sdsl::rmq_succinc
 	return lcp[idx];
 }
 
+inline len_t lcs_naive(const std::string& text, const len_t a, const len_t b, len_t upper_bound) {
+	upper_bound = std::min(std::min(a,b),upper_bound);
+	len_t i=0;
+	while(upper_bound >= i && text[a-i] == text[b-i]) { ++i;}
+	return i;
+}
+
+inline len_t lcp_naive(const std::string& text, const len_t a, const len_t b, const len_t upper_bound) {
+	len_t i=0;
+	while(upper_bound >= i && text[a+i] == text[b+i]) { ++i;}
+	return i;
+}
+
 /**
  * Compute the longst common suffix of T[..a] and T[..b]
  * @param isai the inverse suffix array of the reversed text
@@ -262,18 +277,12 @@ inline len_t lcs_rmq(const isa_t& isai, const lcp_t& lcs, const sdsl::rmq_succin
 };
 
 
-
-struct Square {
-	len_t start;
-	len_t period;
-	Square(len_t _start, len_t _period) : start(_start), period(_period) {}
-} __attribute__((__packed__));
-
-
 /**
  * @param text the input text. We revert the text in place (and back again), so it cannot be made constant
+ * @param report_square a function of type void (*report_square)(len_t start, len_t period)) 
  */
-Vector<Square> compute_distinct_squares(std::string& text) {
+template<class report_t>
+void compute_distinct_squares(std::string& text, const report_t& report_square) {
 	const len_t n = text.length()+1;
 	Vector<len_t> sa(n);
 	suffix_sort((const uint8_t*)text.c_str(), sa.data(), n);
@@ -313,10 +322,23 @@ Vector<Square> compute_distinct_squares(std::string& text) {
 
 
 
-	auto lcpq = [&isa,&lcp,&rmqlcp] (const len_t a, const len_t b) {
+	auto lcpq = [&text, &isa,&lcp,&rmqlcp] (const len_t a, const len_t b, const len_t upper_bound) {
+		if(upper_bound < RMQ_THRES_LCP) {
+			return lcp_naive(text, a,b, upper_bound);
+		} else {
+			const len_t ret = lcp_naive(text, a,b, RMQ_THRES_TRYLCP);
+			if(ret <= RMQ_THRES_TRYLCP) return ret;
+		}
 		return lcp_rmq(isa,lcp,rmqlcp,a,b);
 	};
-	auto lcsq = [&n,&isai,&lcs,&rmqlcs] (const len_t a, const len_t b) {
+	auto lcsq = [&text, &n,&isai,&lcs,&rmqlcs] (const len_t a, const len_t b, const len_t upper_bound) {
+		if(upper_bound < RMQ_THRES_LCP) {
+			const len_t ret = lcs_naive(text, a,b,upper_bound);
+			if(ret <= upper_bound) return ret;
+		} else {
+			const len_t ret = lcs_naive(text, a,b, RMQ_THRES_TRYLCP);
+			if(ret <= RMQ_THRES_TRYLCP) return ret;
+		}
 		return lcs_rmq(isai,lcs,rmqlcs,a,b);
 	};
 
@@ -324,10 +346,8 @@ Vector<Square> compute_distinct_squares(std::string& text) {
 
 	DODEBUG(std::set<std::string> check;)
 
-	Vector<Square> squares;
 	auto report = [&] (const len_t pos, const len_t period) {
-		squares.emplace_back(pos,period);
-
+		report_square(pos,period);
 		if(VLOG_IS_ON(1)) {
 			DVLOG(1) << "T[" << pos << "," << (pos+period*2-1) << "] = " << text.substr(pos,period) << "," << text.substr(pos+period,period) << " | ";
 			DVLOG(1) << "lpf=" << lpf[pos] << " ";
@@ -339,7 +359,6 @@ Vector<Square> compute_distinct_squares(std::string& text) {
 			}
 			DVLOG(1) << ss;
 		}
-
 		//checks
 		DCHECK_EQ([&] () {
 				for(len_t i = 0; i < period; ++i) { 
@@ -359,16 +378,21 @@ Vector<Square> compute_distinct_squares(std::string& text) {
 
 	DVLOG(1) << "LZ-Fact";
 	len_t maxperiod = 0;
+	len_t num_factors = 1;
 	for(len_t i = 1; i < text.length(); ) {
 		const len_t factor_length = std::max(static_cast<len_t>(1),lpf[i]);
 		const len_t next_factor_begin = i+factor_length;
 		const len_t next_factor_length = std::max(static_cast<len_t>(1),lpf[next_factor_begin]);
 		maxperiod = std::max(next_factor_length+factor_length, maxperiod);
 		i = next_factor_begin;
+		++num_factors;
 		DVLOG(1) << i << ", ";
 	}
 	DVLOG(1) << "Longest period: " << maxperiod;
 
+	len_t* Z = new len_t[num_factors]; //factor_id of the next long factor
+	len_t* P = new len_t[num_factors]; //starting position of the next long factor
+	memset(Z, 0, sizeof(len_t)*num_factors);
 
 	for(len_t p = 1; p < maxperiod; ++p) {
 		sdsl::bit_vector marker(n);
@@ -397,48 +421,90 @@ Vector<Square> compute_distinct_squares(std::string& text) {
 				}
 				());
 
-			if(p < 5) {
+			if(p < RMQ_THRES_LPF) {
 				linear_rightrotate(text,s,p,lpf,marker, report);
 			} else {
 				rmq_rightrotate(s,p,lpf,marker, report, rmqlpf, lcpq);
 			}
 		};
 
+		for(len_t i = 0, factor_id = 0; i < text.length();) { DCHECK_LT(factor_id, num_factors);
+			if(Z[factor_id] != 0) {
+				const len_t old_factor_id = factor_id;
+				do {
+					i = P[factor_id];
+					factor_id = Z[factor_id];
+					if(i >= text.length()) break;
+				}
+				while (Z[factor_id] != 0);
+				Z[old_factor_id] = factor_id; DCHECK_LE(factor_id, num_factors);
+				P[old_factor_id] = i;
+				if(i >= text.length()) break;
+			}
 
-		for(len_t i = 0; i < text.length();) {
-			const len_t factor_length = std::max(static_cast<len_t>(1),lpf[i]);
-			const len_t next_factor_begin = i+factor_length;
+			len_t factor_length = std::max(static_cast<len_t>(1),lpf[i]);
+			len_t next_factor_begin = i+factor_length;
+			len_t next_factor_length = std::max(static_cast<len_t>(1),lpf[next_factor_begin]);
+			
+			if(factor_length+next_factor_length < p) {
+				const len_t old_factor_id = factor_id;
+				while(factor_length+next_factor_length < p) {
+					if(Z[factor_id] != 0) {
+						do {
+						i = P[factor_id];
+						factor_id = Z[factor_id];
+						if(i >= text.length()) break;
+						} while(Z[factor_id] != 0);
+					} else {
+						i+=factor_length;
+						++factor_id;
+					}
+					if(i >= text.length()) break;
+					factor_length = std::max(static_cast<len_t>(1),lpf[i]);
+					next_factor_begin = i+factor_length;
+					next_factor_length = std::max(static_cast<len_t>(1),lpf[next_factor_begin]);
+				}
+				Z[old_factor_id] = factor_id; DCHECK_LE(factor_id, num_factors);
+				P[old_factor_id] = i;
+				if(i >= text.length()) break;
+			}
+
 			//backward
 			if(factor_length >= p) {
 				const len_t q = next_factor_begin-p; DCHECK_GE(next_factor_begin,p);
-				const len_t length_r = lcpq(next_factor_begin,q);
-				const len_t length_l = (q == 0) ? 0 : lcsq(next_factor_begin-1,q-1);
-				if(length_l + length_r >= p && length_r > 0) {
-					const len_t s = std::max(q - length_l, (q +1< p) ? 0 : q - p + 1); DCHECK_GE(q, length_l);
-					if(!marker[s]) {
-						report_and_rotate(s,p,'A');
+				const len_t length_r = lcpq(next_factor_begin,q,p);
+				if(length_r > 0 ) {
+					const len_t length_l = (q == 0) ? 0 : lcsq(next_factor_begin-1,q-1,p);
+					if(length_l + length_r >= p) {
+						const len_t s = std::max(q - length_l, (q +1< p) ? 0 : q - p + 1); DCHECK_GE(q, length_l);
+						if(!marker[s]) {
+							report_and_rotate(s,p,'A');
+						}
 					}
 				}
 			}
 			// forward
-			const len_t next_factor_length = std::max(static_cast<len_t>(1),lpf[next_factor_begin]);
 			if(factor_length+next_factor_length >= p && i+p < n) {
 				const len_t q = i+p;
-				const len_t length_r = lcpq(i,q);
-				const len_t length_l = (i == 0) ? 0 : lcsq(i-1,q-1); DCHECK_GE(i, length_l); 
+				const len_t length_l = (i == 0) ? 0 : lcsq(i-1,q-1,p); DCHECK_GE(i, length_l); 
 				const len_t s = std::max(i - length_l, (i < p+1) ? 0 : i - p + 1); 
-				if(length_r > 0 && length_l > 0 && length_l + length_r >= p && s+p <= next_factor_begin) { // TODO: actually s+p < next_factor_begin
-					if(!marker[s]) {
-						report_and_rotate(s,p,'B');
+				if(length_l > 0 && s+p <= next_factor_begin) {
+					const len_t length_r = lcpq(i,q,p);
+					if(length_r > 0 && length_l + length_r >= p) { 
+						if(!marker[s]) {
+							report_and_rotate(s,p,'B');
+						}
 					}
 				}
 			
 			}
 
 			i+=factor_length;
+			++factor_id;
 		}
 	}
-	return squares;
+	delete [] Z;
+	delete [] P;
 
 }
 
