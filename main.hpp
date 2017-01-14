@@ -359,7 +359,7 @@ void compute_distinct_squares(std::string& text, const report_t& report_square) 
 				if(i == pos+period) DVLOG(1) << ","; 
 				ss << "(" << ((size_t)text[i]) << ")"; 
 			}
-			DVLOG(1) << ss;
+			DVLOG(1) << ss.str();
 		}
 		//checks
 		DCHECK_EQ([&] () {
