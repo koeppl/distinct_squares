@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Köppl"
+  given-names: "Dominik"
+  orcid: "http://orcid.org/0000-0002-8721-4444"
+title: "Computing All Distinct Squares in Linear Time for Integer Alphabets"
+url: "https://github.com/koeppl/distinct_squares"
+preferred-citation:
+  type: conference-paper
+  authors:
+  - family-names: "Bannai"
+    given-names: "Hideo"
+  - family-names: "Inenaga"
+    given-names: "Inenaga"
+  - family-names: "Köppl"
+    given-names: "Dominik"
+    orcid: "http://orcid.org/0000-0002-8721-4444"
+  doi: 10.4230/LIPIcs.CPM.2017.22
+  journal: "Proc. CPM"
+  start: 22:1  # First page number
+  end: 22:18 # Last page number
+  title: "Computing All Distinct Squares in Linear Time for Integer Alphabets"
+  year: 2017
+  issue: LIPIcs
+  volume: 78
